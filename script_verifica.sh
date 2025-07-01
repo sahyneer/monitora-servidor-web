@@ -3,7 +3,7 @@
 
 . /verifica_servidor/.env
 
-URL="192.168.1.16"
+URL=$(hostname -I)
 
 requisicaoHTTP=$(curl -Is $URL | head -n 1)
 
