@@ -1,7 +1,7 @@
 
 #!/bin/bash
 
-. /verifica_servidor/.env
+. /monitora-servidor-web/.env
 
 URL=$(hostname -I)
 
