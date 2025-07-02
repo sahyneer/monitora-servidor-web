@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 . /monitora-servidor-web/.env

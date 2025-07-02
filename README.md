@@ -46,7 +46,7 @@
 
 - [Instalação do Servidor Nginx](#instalação-do-servidor-nginx)
 
-    + [Testando o Servidor Nginx](#testando-o-serividor-nginx)
+    + [Testando o Servidor Nginx](#testando-o-servidor-nginx)
 
 - [Configurações Gerais do Nginx](#configurações-gerais-do-nginx)
 
@@ -56,6 +56,21 @@
 
     + [Teste de Reinicialização Automática](#teste-de-reinicialização-automatica)
 
+- [Localizando a Página HTML](#localizando-a-página-html)
+
+- [Criando o Ambiente de Webhook no Discord](#criando-o-ambiente-de-webhook-no-discord)
+
+- [Criando o Arquivo .env](#criando-o-arquivo-env)
+
+- [Importando o Script](#importando-o-script)
+
+    + [Script de Monitoramento](#script-de-monitoramento)
+
+- [Funcionamento do Script a Cada Minuto](#funcionamento-do-script-a-cada-minuto)
+
+    + [Comandos Básicos do Cron](#comandos-básicos-do-cron)
+
+    + [Configurando o Cron para o Script](#configurando-o-cron-para-o-script)
 
 ### Configuração da Máquina Virtual
 
@@ -102,7 +117,13 @@ Para confirmar se está instalado, use o comando `systemctl status nginx`. Deve 
 
 #### Testando o Servidor Nginx
 
-Digite o ip público da EC2 no navegador 
+Digite o ip público da EC2 no navegador, caso apareça o site, o Nginx está funcionando corretamente. O ip pode ser encontrado na página que contém informações da instância ao inicia-la:
+
+<img src="./img-README/ec2-ip.png" alt="Ip público no EC2">
+
+Em casos de aplicação em VM local, execute o comando `ip a` para saber o ip local:
+
+<img src="./img-README/ip-a.png" alt="Ip público no EC2">
 
 ### Configurações Gerais do Nginx
 
@@ -112,7 +133,7 @@ Para controlar os serviços do `systemd` usa-se o comando `systemctl`, e com ele
 
 </br>
 
-### Iniciando o servidor automaticamente
+#### Iniciando o servidor automaticamente
 
 Normalmente após a instalação do Nginx, o servidor é automaticamente configurado para iniciar justamente com o boot do sistema. É possível conferir isso, executando o comando `systemctl is-enabled nginx`. O resultado esperado é `enabled`.
 
@@ -120,7 +141,7 @@ Caso não seja esse o caso, use o comando ``systemctl enable nginx`` para ativar
 
 </br>
 
-### Reiniciando o servidor em caso de interrupção ou falha
+#### Reiniciando o servidor em caso de interrupção ou falha
  
  Para essa configuração é necessário acessar o arquivo que controla o serviço do Nginx:
 
@@ -133,7 +154,7 @@ Caso não seja esse o caso, use o comando ``systemctl enable nginx`` para ativar
 
 Ao abrir o arquivo, tem por `default` algumas configurações do Nginx, como mostrado abaixo:
 
-<img src="./img-README/conf-nginx.png" alt="Configurações default do Nginx">
+<img src="./img-README/systemd-nginx-config.png" alt="Configurações default do Nginx">
 
 Para fazer a modificação do documento, use o `nano`, `vi`, ou qualquer outro editor, e acrescente em `service` as seguintes linhas:
 
@@ -149,7 +170,7 @@ systemctl restart nginx # reiniciar o servidor
 systemctl status nginx # verificar status de funcionamento
 ```
 
-### Teste de Reinicialização Automática
+#### Teste de Reinicialização Automática
 
 Caso deseje testar o funcionamento desta configuração, podemos simular uma interrupção brusca no servidor ao forçar a finalização do processo em execução. Use o seguinte comando:
 
@@ -162,6 +183,117 @@ Após 10 segundos execute o comando `systemctl status nginx` para verificar o st
 <img src="./img-README/teste-nginx.png" alt="Status após a interrupção do Nginx ">
 
 Note abaixo que ocorreu uma falha de conexão com o signal (escrito em laranja) e na linha seguinte, mostra que 10 segundos depois, o Nginx reiniciou automaticamente como definido nas configurações.
+
+### Localizando a Página HTML
+
+A localização do html é definida dentro das configurações do Nginx. No Ubuntu em específico, o arquivo pode ser encontrado no caminho `/etc/nginx/sites-available/default`.
+
+> Em algumas distribuições pode estar localizado em /etc/nginx/conf.d/default.conf
+
+Dentro do arquivo, é preciso procurar `root` no bloco `server`. Abaixo, vemos que o arquivo html está no caminho `/var/www/html` com o nome `index` ou `index.html`
+
+<img src="./img-README/nginx-config.png" alt="Status após a interrupção do Nginx ">
+
+> Lembrando que esse caminho pode mudar de acordo com cada distribuição e versão, por isso é importante verificar primeiro antes de acessar o repositório!
+
+Portanto, para alterar esse arquivo basta ir até o diretório e editar o arquivo ou importar um arquivo.
+
+### Criando o Ambiente de Webhook no Discord
+
+Antes de gerenciar o recurso, é preciso ter criado um servidor e um canal de texto
+
+#### Passso a Passo
+
+1. No servidor, abra a aba de configurações do canal;
+2. Selecione a opção "editar canal";
+3. No lado esquerdo da tela, selecione "integrações";
+4. Selecione a opção "Webhooks";
+5. Crie um "Novo Webhook";
+6. Copie a URL.
+
+> A URL não pode ser compartilhada publicamente, pois pode ser usada por qualquer pessoa para enviar mensagens. Por isso, será criado um arquivo .env para encriptar os dados de acesso contidos e não deixar exposto no script.
+
+<img src="./img-README/discord.png" alt="Configuração do Webhook no Discord">
+
+### Criando o Arquivo .env
+
+Dentro do diretório crie o arquivo .env para colocar a URL do Webhook copiada dentro da variável `discordWebhook`:
+
+```bash
+discordWebhook="URL"
+```
+
+>CUIDADO ao criar esse arquivo, não pode conter espaços antes, dentro e/ou depois da linha de código. Caso o contrário o script não será capaz de detectar corretamente o conteúdo do arquivo .env!
+
+### Importando o Script
+
+O script, escrito em bash, tem a função de verificar as requisições http e enviar logs de status do servidor, além de enviar um aviso via webhook do Discord em caso de status Offline.
+
+Para isso, basta importar este repositório no diretório raíz:
+
+```bash
+git clone https://github.com/sahyneer/monitora-servidor-web.git
+```
+
+#### Script de Monitoramento
+
+```bash
+#!/bin/bash
+
+. /monitora-servidor-web/.env
+
+URL=$(hostname -I)
+
+requisicaoHTTP=$(curl -Is $URL | head -n 1)
+
+# Definição de cores para melhor visualização dos logs
+fonteVermelho='\033[0;31m'
+fonteVerde='\033[0;32m'
+fonteSemCor='\033[0m' # reset de cor
+
+formatacaoData=$(date "+%Y/%m/%d %H:%M:%S")
+
+if [ "$requisicaoHTTP" ]; then
+  printf "${fonteVerde}${formatacaoData} Servidor Online ($URL)${fonteSemCor}\n"
+else
+  printf "${fonteVermelho}${formatacaoData} Servidor Offline ($URL)${fonteSemCor}\n"
+  # Envio da mensagem para o Discord e ocultacao de saida do curl para o log
+  curl -H "Content-Type: application/json" \
+       -X POST \
+       -d "{\"content\": \"🔴 [$formatacaoData] - **Servidor Offline**\"}" \
+       "$discordWebhook" > /dev/null 2>&1
+fi
+```
+
+É necessário tornar o script executável, para isso, dentro do diretório do arquivos, digite o comando:
+
+```bash
+chmod +x script_verifica.sh
+```
+
+### Funcionamento do Script a Cada Minuto
+
+O cron é um agendador de tarefas do sistema que permite executar comandos ou scripts automaticamente em horários ou intervalos regulares. As definições são feitas dentro do arquivo crontab e devem ser carregadas para funcionar corretamente.
+
+#### Comandos Básicos do Cron
+
+1. Verificar status: `service cron status`
+2. Iniciar serviço: `service cron start`
+3. Parar serviço: `service cron stop`
+4. Listar os todos os cronjobs em funcionamento: `crontab -l`
+
+>É importante destacar que os cronjobs são definidos por usuários, ou seja, se definiu um cronjob com o usuário root, não pode alterar ou listar a menos que esteja logado como usuário root!
+
+#### Configurando o Cron para o Script
+
+Primeiramente, abra o arquivo do crontab para edição como o comando: `crontab -e` e acrescente o seguinte código:
+
+```bash
+* * * * * /monitora-servidor-web/script_verifica.sh >> /var/log/monitora.log 2>&1
+```
+O comando acima está determinando que o script_verifica.sh irá rodar a cada minuto (* * * * *) e sua saída será armazenada no arquivo monitora.log (2>&1) sem sobrepor o que já foi escrito a cada ciclo (>>).
+
+Por fim, pode o comando `service cron start` para carregar as novas configurações do crontab.
 
 ## 🧙‍♂️ Autora
 
