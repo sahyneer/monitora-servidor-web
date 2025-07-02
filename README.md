@@ -18,26 +18,51 @@
     <a href="#-visão-do-projeto">Visão do projeto</a> •
     <a href="#-tecnologias">Tecnologias</a> •
     <a href="#-instruções">Instruções</a> •
+    <a href="#-testes">Testes</a> •
     <a href="#-autora">Autora</a>
  </p>
 
+</br>
 
 ## 🔭 Visão do projeto
 
-<p>O projeto foi desenvolvido durante a 1º Sprint do Programa Compass.Uol Scholarship, que tinha por desafio construir uma instância Amazon EC2 com um servidor Nginx no Ubuntu 24.04 e um sistema de monitoramento e notificação.</p>
+O projeto foi desenvolvido durante a 1º Sprint do Programa Compass.Uol Scholarship, que tinha por desafio construir uma instância Amazon EC2 com um servidor Nginx no Ubuntu 24.04 e um script de monitoramento e notificação através do Webhook Discord.
 
-<p>O sistema foi configurado para funcionar automaticamente ao ligar a máquina e reiniciar em caso de falha ou interrupção, além de realizar monitoramentos a cada minuto sobre status de funcionamento. Caso o sistema não estiver funcionando, o script envia avisos para um servidor Discord informando a indisponibilidade do servidor, juntamente com data e hora de detecção.</p>
+O sistema foi configurado para funcionar automaticamente ao ligar a máquina e reiniciar em caso de falha ou interrupção, além de realizar monitoramentos a cada minuto sobre status de funcionamento. Caso o sistema não estiver funcionando, o script envia avisos informando a indisponibilidade do servidor, juntamente com data e hora de detecção.
+
+</br>
 
 
 ## 💻 Tecnologias
 
 [![Tenologias](https://skillicons.dev/icons?i=linux,bash,ubuntu,discord,nginx,aws,git)](https://skillicons.dev)
 
+</br>
+
 ## ⚙️ Instruções
 
 ### Índice
 
-- [Configuração do Ambiente AWS](#configuração-do-ambiente-aws)
+- [Configuração da VPC](#configuração-da-vpc)
+
+    + [Criando a VPC](#criando-a-vpc)
+
+    + [Criando Subredes](#criando-subredes)
+
+    + [Criando o Internet Gateway](#criando-o-internet-gateway)
+
+    + [Criando Tabelas de Rotas](#criando-tabelas-de-rotas)
+
+    + [Mapa de Recursos](#mapa-de-recursos)
+
+- [Configurando a EC2](#configurando-a-ec2)
+
+    + [Criando a EC2](#criando-a-ec2)
+
+    + [Criando um Grupo de Segurança](#criando-um-grupo-de-segurança)
+
+    + [Acessando a EC2](#acessando-a-ec2)
+
 - [Configurações Iniciais da VM](#configurações-iniciais-da-vm)
 
     + [Ativando o Superusuário](#ativando-o-superusuário)
@@ -53,8 +78,6 @@
     + [Iniciando o Servidor Automaticamente](#iniciando-o-servidor-automaticamente)
 
     + [Reiniciando o Servidor em Caso de Interrupção ou Falha](#reiniciando-o-servidor-em-caso-de-interrupção-ou-falha)
-
-    + [Teste de Reinicialização Automática](#teste-de-reinicialização-automatica)
 
 - [Localizando a Página HTML](#localizando-a-página-html)
 
@@ -72,15 +95,136 @@
 
     + [Configurando o Cron para o Script](#configurando-o-cron-para-o-script)
 
+</br>
+
+### Configuração da VPC
+
+Antes de criar uma instância EC2, é essencial configurar uma VPC (Virtual Private Cloud) para garantir que os recursos estejam isolados, organizados e seguros dentro de um ambiente personalidado.
+
+##### Criando a VPC
+
+1. Acesse o AWS VPC Console
+2. Painel da VPC > Nuvem Privada Virtual > Suas VPC's
+3. Criar VPC
+4. Selecione "Only VPC" e configure:
+    * Nome: `PB - JUN 2025`
+    * CIDR IPv4: `10.0.0.0/16`
+    * CIDR IPv6: `none`
+    * Tags: rótulos definidos no projeto.
+
+#### Criando Subredes
+1. Painel da VPC > Nuvem Privada Virtual > Sub-redes
+2. Criar sub-rede
+3. Digite o ID da VPC.
+4. Configure as sub-redes:
+
+</br>
+
+| **Subredes** | **Tipo** | **Zona de Disponibilidade** | **CIDR IPv4** |
+|:------------:|:--------:|:---------------------------:|:-------------:|
+|    subpb-A   |  Pública |          us-east-1a         |  10.0.1.0/24  |
+|    subpb-B   |  Pública |          us-east-1b         |  10.0.2.0/24  |
+|    subpv-A   |  Privada |          us-east-1c         |  10.0.3.0/24  |
+|    subpv-B   |  Privada |          us-east-1d         |  10.0.4.0/24  |
+
+</br>
+
+#### Criando o Internet Gateway
+
+1. Painel da VPC > Nuvem Privada Virtual > Gateways da Internet
+2. Criar Gateway da Internet
+
+    * Nome: `PB-Gateway`
+
+4. Clicar em criar Gateway da Internet
+5. Anexar o gateway à VPC
+
+#### Criando Tabelas de Rotas
+* Subredes Públicas
+
+    1. Painel da VPC > Nuvem Privada Virtual > Tabelas de Rotas
+    2. Criar Tabela de Rotas
+        * Nome: `subredes-publicas-PB`
+        * VPC: `PB - JUN 2025`
+    3. Editar a tabela para adicionar a rota `0.0.0.0` apontando para o Gateway de Internet
+    4. Associar com as sub-redes públicas
+
+* Subredes Privadas
+
+    1. Painel da VPC > Nuvem Privada Virtual > Tabelas de Rotas
+    2. Criar Tabela de Rotas
+
+        * Nome: `subredes-privadas-PB`
+        * VPC: `PB - JUN 2025`
+
+    3. Associar com as sub-redes públicas
+
+### Mapa de Recursos
+
+Abaixo temos a representação resumida das estrtura da VPC:
+
+<img src="./img-README/mapa-de-recursos.png" alt="Mapa de Recursos da VPC">
+
+</br>
+
+### Configurando a EC2
+
+#### Criando a EC2
+
+1. Acesse o AWS EC2 Console
+2. EC2 > Instâncias > Instâncias
+3. Executar Instâncias:
+
+    * Nome e Tags: de acordo com o projeto
+    * Selecionar imagem do Sistema Operacional (SO)
+    * Gerar par de chaves para login (RSA/.pem)
+    * Outras configurações de preferência
+
+4. Clicar em Executar Instância
+
+#### Criando um Grupo de Segurança
+
+1. EC2 > Rede e Segurança > Security Groups
+2. Criar Grupo de Segurança
+
+    * Nome: `securityGroup-PB`
+    * Descrição: `Permitir acesso SSH e HTTP`
+    * VPC: `PB - JUN 2025`
+
+3. Adicionar Regras de Entrada para permitir acesso público via HTTP e SSH do próprio IP, a fim de garantir mais segurança ao sistema.
+
+<img src="./img-README/regras-de-entrada-security-group.png" alt="Regras de Entrada do Security Group">
+
+#### Acessando a EC2
+
+Como foi definido as regras de acesso via SSH, a conexão se dará via Prompt de Comando ou Terminal:
+
+1. EC2 > Instâncias > Instâncias
+2. Selecionar a VPC
+3. Estado da Instância > Iniciar Instâncias
+4. Abra o Promp de Comando ou Terminal no mesmo diretório que está a chave de login .pem
+5. Execute o comando `ssh -i "chave.pem" ubuntu@ip_publico`
+6. Siga os passos fianis para o acesso
+
+> Para garantir que a chave de acesso não fique visível publicamente no computador, execute o comando: chmod 400 "chave.pem"
+
+</br>
+
 ### Configuração da Máquina Virtual
+
+Realize as configurações básicas de qualquer SO, definindo usuários, senhas e outras configurações de preferência.
+
+</br>
 
 #### Ativando o Superusuário
 
-<p>Logo após acessar a VM, é de extrema importância estar logado como super usuário, para que assim as configurações possam ser realizadas sem problemas de permissão. Para entrar como superusuário digite o comando abaixo e logo em seguida a senha definida na instalação do SO:</p>
+Logo após acessar a VM, é de extrema importância estar logado como super usuário, para que assim as configurações possam ser realizadas sem problemas de permissão. Para entrar como superusuário digite o comando abaixo e logo em seguida a senha definida na instalação do SO:
 
 ```bash
 sudo su
 ```
+
+</br>
 
 #### Ajustando Data e Hora
 Para obter melhores resultados no uso do sistema, as configurações de data e hora precisam estar ajustadas corretamente. Para conferir isso, digite `date`.
@@ -93,6 +237,8 @@ Depois de conferir, digite de acordo com o continente e cidade que deseja altera
 ```bash
 timectl set-timezone continente/cidade
 ```
+
+</br>
 
 ### Instalação do Servidor Nginx
 
@@ -124,6 +270,8 @@ Digite o ip público da EC2 no navegador, caso apareça o site, o Nginx está fu
 Em casos de aplicação em VM local, execute o comando `ip a` para saber o ip local:
 
 <img src="./img-README/ip-a.png" alt="Ip público no EC2">
+
+</br>
 
 ### Configurações Gerais do Nginx
 
@@ -170,19 +318,7 @@ systemctl restart nginx # reiniciar o servidor
 systemctl status nginx # verificar status de funcionamento
 ```
 
-#### Teste de Reinicialização Automática
-
-Caso deseje testar o funcionamento desta configuração, podemos simular uma interrupção brusca no servidor ao forçar a finalização do processo em execução. Use o seguinte comando:
-
-```bash
-kill -9 $(pidof nginx)
-```
-
-Após 10 segundos execute o comando `systemctl status nginx` para verificar o status do servidor e verá a seguinte informação:
-
-<img src="./img-README/teste-nginx.png" alt="Status após a interrupção do Nginx ">
-
-Note abaixo que ocorreu uma falha de conexão com o signal (escrito em laranja) e na linha seguinte, mostra que 10 segundos depois, o Nginx reiniciou automaticamente como definido nas configurações.
+</br>
 
 ### Localizando a Página HTML
 
@@ -198,11 +334,11 @@ Dentro do arquivo, é preciso procurar `root` no bloco `server`. Abaixo, vemos q
 
 Portanto, para alterar esse arquivo basta ir até o diretório e editar o arquivo ou importar um arquivo.
 
+</br>
+
 ### Criando o Ambiente de Webhook no Discord
 
-Antes de gerenciar o recurso, é preciso ter criado um servidor e um canal de texto
-
-#### Passso a Passo
+Antes de gerenciar o recurso, é preciso ter criado um servidor e um canal de texto.
 
 1. No servidor, abra a aba de configurações do canal;
 2. Selecione a opção "editar canal";
@@ -215,6 +351,8 @@ Antes de gerenciar o recurso, é preciso ter criado um servidor e um canal de te
 
 <img src="./img-README/discord.png" alt="Configuração do Webhook no Discord">
 
+</br>
+
 ### Criando o Arquivo .env
 
 Dentro do diretório crie o arquivo .env para colocar a URL do Webhook copiada dentro da variável `discordWebhook`:
@@ -224,6 +362,8 @@ discordWebhook="URL"
 ```
 
 >CUIDADO ao criar esse arquivo, não pode conter espaços antes, dentro e/ou depois da linha de código. Caso o contrário o script não será capaz de detectar corretamente o conteúdo do arquivo .env!
+
+</br>
 
 ### Importando o Script
 
@@ -271,9 +411,13 @@ fi
 chmod +x script_verifica.sh
 ```
 
+</br>
+
 ### Funcionamento do Script a Cada Minuto
 
 O cron é um agendador de tarefas do sistema que permite executar comandos ou scripts automaticamente em horários ou intervalos regulares. As definições são feitas dentro do arquivo crontab e devem ser carregadas para funcionar corretamente.
+
+</br>
 
 #### Comandos Básicos do Cron
 
@@ -284,6 +428,8 @@ O cron é um agendador de tarefas do sistema que permite executar comandos ou sc
 
 >É importante destacar que os cronjobs são definidos por usuários, ou seja, se definiu um cronjob com o usuário root, não pode alterar ou listar a menos que esteja logado como usuário root!
 
+</br>
+
 #### Configurando o Cron para o Script
 
 Primeiramente, abra o arquivo do crontab para edição como o comando: `crontab -e` e acrescente o seguinte código:
@@ -293,7 +439,37 @@ Primeiramente, abra o arquivo do crontab para edição como o comando: `crontab 
 ```
 O comando acima está determinando que o script_verifica.sh irá rodar a cada minuto (* * * * *) e sua saída será armazenada no arquivo monitora.log (2>&1) sem sobrepor o que já foi escrito a cada ciclo (>>).
 
-Por fim, pode o comando `service cron start` para carregar as novas configurações do crontab.
+Por fim, use o comando `service cron start` para carregar as novas configurações do crontab.
+
+</br>
+
+## 🧪 Testes
+
+### 1. Verificando a Reinicialização Automática 
+
+Podemos simular uma interrupção brusca no servidor ao forçar a finalização do processo em execução. Use o seguinte comando:
+
+```bash
+kill -9 $(pidof nginx)
+```
+
+Após 10 segundos execute o comando `systemctl status nginx` para verificar o status do servidor e verá a seguinte informação:
+
+<img src="./img-README/teste-nginx.png" alt="Status após a interrupção do Nginx ">
+
+Note no que final da saída, ocorreu uma falha de conexão (escrito em laranja) e na linha seguinte, mostra que 10 segundos depois, o Nginx reiniciou automaticamente como definido nas configurações.
+
+### 2. Verificando Monitoramento de Status
+
+Ao acessar o arquivo de monitoramento `/var/log/monitora.log`, vemos todas as verificações a partir do momento que o servidor é ativado quando ligado:
+
+<img src="./img-README/teste-monitora.png" alt="Status após a interrupção do Nginx ">
+
+Também, vemos abaixo as notificações recebidas no canal do Discord quando o servidor está Offline:
+
+<img src="./img-README/teste-discord.png" alt="Status após a interrupção do Nginx ">
+
+</br>
 
 ## 🧙‍♂️ Autora
 
